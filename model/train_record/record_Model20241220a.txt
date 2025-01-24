@@ -1,0 +1,20 @@
+Epoch [1000], Train RMSD = 0.938051 (MeV), Train RMSRD = 49.375119, LR = 0.001
+Epoch [1000], Test RMSD = 1.025116 (MeV), Test RMSRD = 116.066606
+Epoch [2000], Train RMSD = 0.741268 (MeV), Train RMSRD = 19.281582, LR = 0.001
+Epoch [2000], Test RMSD = 0.807136 (MeV), Test RMSRD = 165.327031
+Epoch [3000], Train RMSD = 0.654173 (MeV), Train RMSRD = 11.296823, LR = 0.001
+Epoch [3000], Test RMSD = 0.779136 (MeV), Test RMSRD = 143.851004
+Epoch [4000], Train RMSD = 0.564510 (MeV), Train RMSRD = 12.783653, LR = 0.001
+Epoch [4000], Test RMSD = 0.713811 (MeV), Test RMSRD = 77.423201
+Epoch [5000], Train RMSD = 0.547774 (MeV), Train RMSRD = 6.129587, LR = 0.001
+Epoch [5000], Test RMSD = 0.713194 (MeV), Test RMSRD = 32.274821
+Epoch [6000], Train RMSD = 0.506573 (MeV), Train RMSRD = 10.965386, LR = 0.001
+Epoch [6000], Test RMSD = 0.693118 (MeV), Test RMSRD = 40.911212
+Epoch [7000], Train RMSD = 0.380745 (MeV), Train RMSRD = 3.601618, LR = 0.001
+Epoch [7000], Test RMSD = 0.655404 (MeV), Test RMSRD = 6.012555
+Epoch [8000], Train RMSD = 0.334805 (MeV), Train RMSRD = 2.950454, LR = 0.001
+Epoch [8000], Test RMSD = 0.603380 (MeV), Test RMSRD = 28.581649
+Epoch [9000], Train RMSD = 0.349067 (MeV), Train RMSRD = 4.789377, LR = 0.001
+Epoch [9000], Test RMSD = 0.601514 (MeV), Test RMSRD = 11.962295
+Epoch [10000], Train RMSD = 0.288200 (MeV), Train RMSRD = 3.568524, LR = 0.0001
+Epoch [10000], Test RMSD = 0.565523 (MeV), Test RMSRD = 20.811721
