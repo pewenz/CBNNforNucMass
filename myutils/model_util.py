@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import re
 from myutils.plot_util import plot_learning
+from tqdm.auto import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -134,7 +135,7 @@ def train_model(epochs_add, model, train_loader, test_loader, optimizer, monitor
     msd_loss = nn.MSELoss()
     epochs_no_improve = 0
 
-    for epoch in range(epochs_add):
+    for epoch in tqdm(range(epochs_add)):
 
         train_MSD = 0.0
         train_MSRD = 0.0

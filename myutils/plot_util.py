@@ -1,6 +1,12 @@
 import matplotlib.pyplot as plt
-from config import MAGIC_NUMBERS
+import config as cf
+from config import MAGIC_NUMBERS, TRAIN_DATA_PATH
+import matplotlib.ticker as ticker
 from matplotlib.ticker import AutoMinorLocator
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import torch
 
 
 # Set the style of the chart
@@ -135,4 +141,133 @@ def plot_learning(train_proportion, find_optimal, epochs, train_rmsd, test_rmsd,
 
     plt.tight_layout()
 
+    plt.show()
+
+
+def normalize(data, min_val=None, max_val=None):
+    """Normalize the data to [-1, 1]"""
+    min_val = data.min() if min_val is None else min_val
+    max_val = data.max() if max_val is None else max_val
+
+    normalize_data = 2 * (data - min_val) / (max_val - min_val) - 1
+    return normalize_data, min_val, max_val
+
+
+def full_pivot_table(dataframe, value):
+    """Create a full pivot table with all Z and N values"""
+    raw_data = pd.read_csv(TRAIN_DATA_PATH)
+    max_proton_dim = raw_data['Z'].max()
+    max_neutron_dim = raw_data['N'].max()
+
+    full_index = pd.Index(np.arange(0, max_proton_dim + 1), name='Z')
+    full_columns = pd.Index(np.arange(0, max_neutron_dim + 1), name='N')
+
+    pivot_table = dataframe.pivot(index='Z', columns='N', values=value)
+    pivot_table = pivot_table.reindex(index=full_index, columns=full_columns)
+
+    return pivot_table
+
+
+def plot_residual_heatmap(model, physical_model_name, scale=False):
+    raw_data = pd.read_csv(TRAIN_DATA_PATH)
+    heatmap_df = raw_data[['Z', 'N', physical_model_name]].copy()
+    normalized_phy_mol_res, minimum, maximum = normalize(heatmap_df[physical_model_name])
+    heatmap_df[f"normalized_{physical_model_name}"] = normalized_phy_mol_res
+
+    pred_path = f"model/prediction/pred_{model.__class__.__name__}.csv"
+    pred_df = pd.read_csv(pred_path)
+    phy_NN_res = heatmap_df[physical_model_name] - pred_df['pred_NN']
+    heatmap_df['phy_NN_res'] = phy_NN_res
+    normalized_phy_NN_res = normalize(phy_NN_res, minimum, maximum)[0]
+    heatmap_df["normalized_phy_NN_res"] = normalized_phy_NN_res
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(20, 24))
+
+    plt.subplots_adjust(hspace=0.25)
+
+    if scale:
+        phy_res_pivot = full_pivot_table(heatmap_df, f"normalized_{physical_model_name}")
+        phy_NN_res_pivot = full_pivot_table(heatmap_df, "normalized_phy_NN_res")
+
+        sns.heatmap(phy_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=-1, vmax=1,
+                    ax=ax1).set_facecolor('#CCCCCC')
+        sns.heatmap(phy_NN_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=-1, vmax=1,
+                    ax=ax2).set_facecolor('#CCCCCC')
+    else:
+        phy_res_pivot = full_pivot_table(heatmap_df, physical_model_name)
+        phy_NN_res_pivot = full_pivot_table(heatmap_df, "phy_NN_res")
+
+        sns.heatmap(phy_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=minimum, vmax=maximum,
+                    ax=ax1).set_facecolor('#CCCCCC')
+        sns.heatmap(phy_NN_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=minimum, vmax=maximum,
+                    ax=ax2).set_facecolor('#CCCCCC')
+
+    ax1.set_title('Physical Model', pad=15, fontsize=25)
+    ax2.set_title(f"Physical Model + Neural Network ({model.__class__.__name__})", pad=15, fontsize=25)
+
+    for ax in [ax1, ax2]:
+        set_chart_style(ax)
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+        ax.tick_params(axis='x', rotation=0)
+        ax.set_xlabel('N', fontsize=25)
+        ax.set_ylabel('Z', fontsize=25)
+        colorbar = ax.collections[0].colorbar
+        colorbar.ax.tick_params(labelsize=10)
+        if scale:
+            colorbar.set_label("Normalized Residual", fontsize=20)
+        else:
+            colorbar.set_label("Residual(MeV)", fontsize=20)
+
+    plt.show()
+
+
+def plot_isotopic_res(model, Z, input_neurons):
+    all_dataset_path = "data/all_dataset.csv"
+    eva_nuclides = pd.read_csv(all_dataset_path)
+
+    isotopes = eva_nuclides[eva_nuclides["Z"] == Z]
+
+    train_dataset_path = "data/train_dataset.csv"
+    train_nuclides = pd.read_csv(train_dataset_path)
+
+    input_data = isotopes[input_neurons].values
+    input_data = torch.tensor(input_data, dtype=torch.float32).to(cf.device)
+
+    key_columns = ["Z", "N"]
+    N_in_train = pd.merge(isotopes, train_nuclides, on=key_columns, how="inner")
+    N_not_in_train = isotopes[~isotopes["N"].isin(N_in_train["N"])]
+
+    model.eval()
+    with torch.no_grad():
+        output_data = model(input_data).cpu().numpy()
+
+    plot_data = isotopes[["Z", "N"]].copy()
+    plot_data["LDM_residual(MeV)"] = isotopes["LDM_residual(MeV)"]
+    plot_data["NN_pred"] = output_data
+    plot_data["refined_LDM"] = isotopes["LDM_residual(MeV)"] - plot_data["NN_pred"]
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(plot_data["N"], plot_data["refined_LDM"], label="LDM+NN", marker='o')
+    plt.plot(plot_data["N"], plot_data["LDM_residual(MeV)"], label="LDM", marker='s')
+    plt.axhline(0, color='gray', linestyle='--', linewidth=2)
+    plt.xlabel("N", fontsize=16)
+    plt.ylabel("Residual (MeV)", fontsize=16)
+    plt.title(f"Residuals in the Z = {Z} isotopic chain", fontsize=16)
+
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
+    for spine in ['top', 'right', 'left', 'bottom']:
+        ax.spines[spine].set_linewidth(1)
+        ax.spines[spine].set_edgecolor('black')
+
+    ax.tick_params(which='both', bottom=True, top=True, left=True, right=True, labelbottom=True, labelleft=True,
+                   labelright=False, labeltop=False, direction='in', length=6, width=1)
+    ax.tick_params(which='minor', length=3, width=1)
+
+    for n in N_not_in_train["N"]:
+        ax.axvspan(n - 0.5, n + 0.5, color='gray', alpha=0.3, hatch='/')
+
+    plt.legend(loc='upper right', bbox_to_anchor=(0.95, 0.95), fontsize=14)
     plt.show()
