@@ -164,3 +164,44 @@ def split_and_load(dataset, random_seed, train_proportion):
           f"Sample distribution: {sample_distribution}")
 
     return train_loader, test_loader
+
+
+def compute_nuclide_sep_rmsd(model, physical_model_name):
+    train_dataset = pd.read_csv('data/train_dataset.csv')
+    dataset = train_dataset[['N', 'Z', 'B_exp(MeV)', f'B_{physical_model_name}(MeV)']].copy()
+
+    res_pred = pd.read_csv(f"model/prediction/pred_{model.__class__.__name__}.csv")
+    dataset[f"B_{physical_model_name}_NN(MeV)"] = dataset[f"B_{physical_model_name}(MeV)"] + res_pred['pred_NN']
+
+    sep_funcs = {
+        "Sn": neutron_1_separation_energy,
+        "S2n": neutron_2_separation_energy,
+        "Sp": proton_1_separation_energy,
+        "S2p": proton_2_separation_energy,
+    }
+
+    data_groups = [
+        ("exp", "B_exp(MeV)"),
+        (physical_model_name, f"B_{physical_model_name}(MeV)"),
+        (f"{physical_model_name}_NN", f"B_{physical_model_name}_NN(MeV)")
+    ]
+
+    for tag, head in data_groups:
+        for key, func in sep_funcs.items():
+            col_name = f"{key}_{tag}(MeV)"
+            dataset[col_name] = func(dataframe=dataset, head_of_BindingEnergy=head)
+
+    performance = {}
+    for tag in [physical_model_name, f"{physical_model_name}_NN"]:
+        performance[tag] = {}
+        for key in sep_funcs.keys():
+            exp_col = f"{key}_exp(MeV)"
+            model_col = f"{key}_{tag}(MeV)"
+            residual = dataset[exp_col] - dataset[model_col]
+            rmsd = (residual ** 2).mean() ** 0.5
+            performance[tag][key] = rmsd
+
+    print(f"Physical model: {physical_model_name}")
+    print(f"NN model: {model.__class__.__name__}")
+    print(performance)
+    return performance

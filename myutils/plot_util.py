@@ -3,29 +3,30 @@ import config as cf
 from config import MAGIC_NUMBERS, TRAIN_DATA_PATH
 import matplotlib.ticker as ticker
 from matplotlib.ticker import AutoMinorLocator
-import seaborn as sns
 import pandas as pd
-import numpy as np
 import torch
+import numpy as np
 
 
 # Set the style of the chart
-def set_chart_style(ax: plt.Axes):
+def set_chart_style(ax: plt.Axes,
+                    neutron_upper_limit=180,
+                    proton_upper_limit=120):
 
     for y in MAGIC_NUMBERS:
         ax.axhline(y=y, color='black', linestyle='-.', linewidth=0.5)
     for x in MAGIC_NUMBERS:
         ax.axvline(x=x, color='black', linestyle='-.', linewidth=0.5)
 
-    ax.set_xlim(0, 170)
-    ax.set_xticks(range(0, 171, 20), minor=False)
-    ax.set_xticks(range(10, 171, 20), minor=True)
-    ax.set_xticklabels(range(0, 171, 20), fontsize=20)
+    ax.set_xlim(0, neutron_upper_limit)
+    ax.set_xticks(range(0, neutron_upper_limit+1, 20), minor=False)
+    ax.set_xticks(range(10, neutron_upper_limit+1, 20), minor=True)
+    ax.set_xticklabels(range(0, neutron_upper_limit+1, 20), fontsize=20)
 
-    ax.set_ylim(0, 120)
-    ax.set_yticks([20, 40, 60, 80, 100, 120], minor=False)
-    ax.set_yticks([10, 30, 50, 70, 90, 110], minor=True)
-    ax.set_yticklabels([20, 40, 60, 80, 100, 120], fontsize=20)
+    ax.set_ylim(0, proton_upper_limit)
+    ax.set_yticks(range(20, proton_upper_limit + 1, 20), minor=False)
+    ax.set_yticks(range(10, proton_upper_limit - 1, 20), minor=True)
+    ax.set_yticklabels(range(20, proton_upper_limit + 1, 20), fontsize=20)
 
     for spine in ['top', 'right', 'left', 'bottom']:
         ax.spines[spine].set_linewidth(2)
@@ -44,7 +45,10 @@ def plot_sample_nuclides_distribution(N_train, Z_train, N_test, Z_test):
     ax.scatter(N_train, Z_train, c='gray', marker='s', s=10, label='Training set')
     ax.scatter(N_test, Z_test, c='red', marker='o', s=10, label='Test set')
 
-    set_chart_style(ax)
+    # x_upper_limit = int(max(max(N_train), max(N_test)))
+    # y_upper_limit = int(max(max(Z_train), max(Z_test)))
+
+    set_chart_style(ax, 170, 120)
 
     ax.legend(loc='upper left', bbox_to_anchor=(0.035, 0.965), prop={'size': 30}, scatterpoints=1, handletextpad=0,
               labelspacing=1, markerscale=5)
@@ -123,15 +127,15 @@ def plot_learning(train_proportion, find_optimal, epochs, train_rmsd, test_rmsd,
 
     # Specific settings for each subplot
     axs[0].set_ylabel('RMSD (MeV)', size=20)
-    axs[0].axhline(y=train_line, color='#4277EB', linestyle='-', linewidth=1)
+    axs[0].axhline(y=train_line, color='#4277EB', linestyle='--', linewidth=1)
     axs[0].annotate(f'{train_line}', xy=(axs[0].get_xlim()[1], train_line), xytext=(4, -6),
                     textcoords='offset points', fontsize=15,
                     color='#4277EB')
-    axs[0].axhline(y=test_line, color='#FF1B1F', linestyle='-', linewidth=1)
+    axs[0].axhline(y=test_line, color='#FF1B1F', linestyle='--', linewidth=1)
     axs[0].annotate(f'{test_line}', xy=(axs[0].get_xlim()[1], test_line), xytext=(4, -6),
                     textcoords='offset points', fontsize=15,
                     color='#FF1B1F')
-    axs[0].axhline(y=entire_line, color='#EBBF28', linestyle='-', linewidth=1)
+    axs[0].axhline(y=entire_line, color='#EBBF28', linestyle='--', linewidth=1)
     axs[0].annotate(f'{entire_line}', xy=(axs[0].get_xlim()[1], entire_line), xytext=(4, -4),
                     textcoords='offset points', fontsize=15,
                     color='#EBBF28')
@@ -144,80 +148,70 @@ def plot_learning(train_proportion, find_optimal, epochs, train_rmsd, test_rmsd,
     plt.show()
 
 
-def normalize(data, min_val=None, max_val=None):
-    """Normalize the data to [-1, 1]"""
+def data_scale(data, min_val=None, max_val=None, zero2one=False):
+    """Scale the data to [0,1] or default [-1, 1]"""
     min_val = data.min() if min_val is None else min_val
     max_val = data.max() if max_val is None else max_val
-
-    normalize_data = 2 * (data - min_val) / (max_val - min_val) - 1
-    return normalize_data, min_val, max_val
-
-
-def full_pivot_table(dataframe, value):
-    """Create a full pivot table with all Z and N values"""
-    raw_data = pd.read_csv(TRAIN_DATA_PATH)
-    max_proton_dim = raw_data['Z'].max()
-    max_neutron_dim = raw_data['N'].max()
-
-    full_index = pd.Index(np.arange(0, max_proton_dim + 1), name='Z')
-    full_columns = pd.Index(np.arange(0, max_neutron_dim + 1), name='N')
-
-    pivot_table = dataframe.pivot(index='Z', columns='N', values=value)
-    pivot_table = pivot_table.reindex(index=full_index, columns=full_columns)
-
-    return pivot_table
+    if zero2one:
+        scaled_data = (data - min_val) / (max_val - min_val)
+    else:
+        scaled_data = 2 * (data - min_val) / (max_val - min_val) - 1
+    return scaled_data, min_val, max_val
 
 
-def plot_residual_heatmap(model, physical_model_name, scale=False):
+def plot_residual_heatmap(model, physical_model_name, scaled=False):
     raw_data = pd.read_csv(TRAIN_DATA_PATH)
     heatmap_df = raw_data[['Z', 'N', physical_model_name]].copy()
-    normalized_phy_mol_res, minimum, maximum = normalize(heatmap_df[physical_model_name])
+    normalized_phy_mol_res, minimum, maximum = data_scale(heatmap_df[physical_model_name], zero2one=False)
     heatmap_df[f"normalized_{physical_model_name}"] = normalized_phy_mol_res
 
     pred_path = f"model/prediction/pred_{model.__class__.__name__}.csv"
     pred_df = pd.read_csv(pred_path)
     phy_NN_res = heatmap_df[physical_model_name] - pred_df['pred_NN']
     heatmap_df['phy_NN_res'] = phy_NN_res
-    normalized_phy_NN_res = normalize(phy_NN_res, minimum, maximum)[0]
+    normalized_phy_NN_res = data_scale(phy_NN_res, min_val=minimum, max_val=maximum, zero2one=False)[0]
     heatmap_df["normalized_phy_NN_res"] = normalized_phy_NN_res
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(20, 24))
-
     plt.subplots_adjust(hspace=0.25)
 
-    if scale:
-        phy_res_pivot = full_pivot_table(heatmap_df, f"normalized_{physical_model_name}")
-        phy_NN_res_pivot = full_pivot_table(heatmap_df, "normalized_phy_NN_res")
+    def scatter_plot(x, data, value, v_min, v_max, colorbar_label):
+        abs_max = max(abs(v_min), abs(v_max))
+        scatter = x.scatter(
+            data['N'],
+            data['Z'],
+            c=data[value],
+            cmap='seismic',
+            marker='o',
+            s=14,
+            vmin=-abs_max,
+            vmax=abs_max
+        )
+        colorbar = fig.colorbar(scatter, ax=x)
+        colorbar.ax.tick_params(labelsize=10)
+        colorbar.set_label(colorbar_label, fontsize=20)
 
-        sns.heatmap(phy_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=-1, vmax=1,
-                    ax=ax1).set_facecolor('#CCCCCC')
-        sns.heatmap(phy_NN_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=-1, vmax=1,
-                    ax=ax2).set_facecolor('#CCCCCC')
+    if scaled:
+        scatter_plot(ax1, heatmap_df, f"normalized_{physical_model_name}", normalized_phy_mol_res.min(),
+                     normalized_phy_mol_res.max(), "Normalized Residual")
+        scatter_plot(ax2, heatmap_df, "normalized_phy_NN_res", normalized_phy_NN_res.min(),
+                     normalized_phy_NN_res.max(), "Normalized Residual")
     else:
-        phy_res_pivot = full_pivot_table(heatmap_df, physical_model_name)
-        phy_NN_res_pivot = full_pivot_table(heatmap_df, "phy_NN_res")
-
-        sns.heatmap(phy_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=minimum, vmax=maximum,
-                    ax=ax1).set_facecolor('#CCCCCC')
-        sns.heatmap(phy_NN_res_pivot, cmap='seismic', center=0, cbar_kws={'pad': 0.02}, vmin=minimum, vmax=maximum,
-                    ax=ax2).set_facecolor('#CCCCCC')
+        scatter_plot(ax1, heatmap_df, physical_model_name, minimum, maximum, "Residual (MeV)")
+        scatter_plot(ax2, heatmap_df, "phy_NN_res", minimum, maximum, "Residual (MeV)")
 
     ax1.set_title('Physical Model', pad=15, fontsize=25)
     ax2.set_title(f"Physical Model + Neural Network ({model.__class__.__name__})", pad=15, fontsize=25)
 
     for ax in [ax1, ax2]:
-        set_chart_style(ax)
+        ax.set_facecolor('#CCCCCC')
+        set_chart_style(ax, neutron_upper_limit=170)
         for spine in ax.spines.values():
             spine.set_visible(True)
         ax.tick_params(axis='x', rotation=0)
         ax.set_xlabel('N', fontsize=25)
         ax.set_ylabel('Z', fontsize=25)
-        colorbar = ax.collections[0].colorbar
-        colorbar.ax.tick_params(labelsize=10)
-        if scale:
-            colorbar.set_label("Normalized Residual", fontsize=20)
-        else:
-            colorbar.set_label("Residual(MeV)", fontsize=20)
+        ax.grid(False)
 
     plt.show()
 
@@ -270,4 +264,93 @@ def plot_isotopic_res(model, Z, input_neurons):
         ax.axvspan(n - 0.5, n + 0.5, color='gray', alpha=0.3, hatch='/')
 
     plt.legend(loc='upper right', bbox_to_anchor=(0.95, 0.95), fontsize=14)
+    plt.show()
+
+
+def plot_nuclear_feature(value, title=None, scaled=False, zero2one=False):
+    data = pd.read_csv(cf.ALL_DATA_PATH)
+
+    if value in ("N", "Z"):
+        heatmap_df = data[['Z', 'N']].copy()
+    else:
+        heatmap_df = data[['Z', 'N', value]].copy()
+
+    normalized_value, minimum, maximum = data_scale(heatmap_df[value], zero2one=zero2one)
+    heatmap_df[f"normalized_{value}"] = normalized_value
+    fig, ax = plt.subplots(figsize=(18, 10))
+    ax.set_facecolor('#CCCCCC')
+    if scaled:
+        scatter_data = heatmap_df[['Z', 'N', f"normalized_{value}"]]
+        scatter = ax.scatter(
+            scatter_data['N'],
+            scatter_data['Z'],
+            c=scatter_data[f"normalized_{value}"],
+            cmap='jet',
+            marker='o',
+            s=10,
+            vmin=normalized_value.min(),
+            vmax=normalized_value.max())
+    else:
+        if value in ("N", "Z"):
+            scatter_data = heatmap_df[['Z', 'N']]
+        else:
+            scatter_data = heatmap_df[['Z', 'N', value]]
+        scatter = ax.scatter(
+            scatter_data['N'],
+            scatter_data['Z'],
+            c=scatter_data[value],
+            cmap='jet',
+            marker='o',
+            s=10,
+            vmin=minimum,
+            vmax=maximum)
+
+    title = f"${title}$" if title else value
+
+    ax.set_title(title, pad=15, fontsize=25)
+    set_chart_style(ax, 185, 125)
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+    ax.tick_params(axis='x', rotation=0)
+    ax.set_xlabel('N', fontsize=25)
+    ax.set_ylabel('Z', fontsize=25)
+    colorbar = fig.colorbar(scatter, ax=ax)
+    colorbar.ax.tick_params(labelsize=10)
+    if scaled:
+        colorbar.set_label(f"Normalized {title}", fontsize=20)
+    else:
+        colorbar.set_label(title, fontsize=20)
+
+    ax.grid(False)
+    plt.show()
+
+
+def plot_nuclide_sep_performance(physical_model_name, model):
+    from myutils.data_util import compute_nuclide_sep_rmsd
+    performance = compute_nuclide_sep_rmsd(model=model, physical_model_name='LDM')
+    energy_types = list(performance[physical_model_name].keys())
+
+    physical_values = [performance[physical_model_name][key] for key in energy_types]
+    nn_values = [performance[f"{physical_model_name}_NN"][key] for key in energy_types]
+
+    x = np.arange(len(energy_types))
+    bar_width = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.bar(x - bar_width / 2, physical_values, bar_width, label=physical_model_name)
+    ax.bar(x + bar_width / 2, nn_values, bar_width, label=f"{physical_model_name}_NN")
+
+    ax.set_ylabel("RMSD (MeV)", fontsize=14)
+    ax.set_title(
+        f"Residual of Nucleon Separation Energies\n({physical_model_name}) vs. ({physical_model_name}+{model.__class__.__name__})",
+        fontsize=16)
+    tex_labels = {"Sn": r"$S_n$",
+                  "S2n": r"$S_{2n}$",
+                  "Sp": r"$S_p$",
+                  "S2p": r"$S_{2p}$"}
+    ax.set_xticks(x)
+    ax.set_xticklabels([tex_labels[label] for label in energy_types], fontsize=14)
+    ax.legend(fontsize=14)
+
+    plt.tight_layout()
     plt.show()
