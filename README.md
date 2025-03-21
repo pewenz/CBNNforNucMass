@@ -11,7 +11,7 @@ You can play with this project by selecting whatever features, labels, model arc
 - [1. Prepare Data](#1-prepare-data)
 - [2. Train a Model](#2-train-a-model)
 - [3. Analysis](#3-analysis)
-- [- License](#license)
+- [License](#license)
 
 ## 1. Prepare Data
 
@@ -33,6 +33,7 @@ from myutils.data_util import data_read, split_and_load
 dataset = data_read(features=FEATURES, labels=LABELS, filepath=cf.TRAIN_DATA_PATH)
 train_loader, test_loader = split_and_load(dataset=dataset, random_seed=RANDOM_SEED, train_proportion=TRAIN_PROPORTION)
 ```
+![img.png](figures/Sample_Distribution.png)
 
 ## 2. Train a Model
 
@@ -73,6 +74,7 @@ model_predict(model, dataset)
 
 `patience`: Stop training to avoid overfitting if no improvement is observed on test dataset after a certain number of epochs.
 
+![img.png](figures/Learning_Curve.png)
 
 ## 3. Analysis
 
@@ -88,6 +90,7 @@ plot_residual_heatmap(model,
                       PHYSICAL_MODEL,
                       scale=False)
 ```
+![img.png](figures/Residual_Heatmap.png)
 
 ### 2. **Plot the Residuals on an Isotopic Chain**
 
@@ -103,7 +106,18 @@ print(f"Optimal parameters loaded from `{BEST_PARAMETER_PATH}`\n")
 
 plot_isotopic_res(model, Z = 106, input_neurons = ['Z', 'N', 'N-Z', 'A', 'P', 'D'])
 ```
+![img.png](figures/Pred_Isotopic.png)
 
+### 3. Nucleon Separation Energy
+
+Example Code:
+```python
+from myutils.model_repo import Model20241220a as MODEL
+from myutils.plot_util import plot_nuclide_sep_performance
+model = MODEL().to(cf.device)
+plot_nuclide_sep_performance(physical_model_name='LDM', model=model)
+```
+![img.png](figures/Nucleon_Separation.png)
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
